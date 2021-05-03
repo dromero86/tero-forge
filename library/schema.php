@@ -4,7 +4,7 @@
  * Tero Framework 
  *
  * @link      https://github.com/dromero86/tero
- * @copyright Copyright (c) 2014-2019 Daniel Romero
+ * @copyright Copyright (c) 2014-2021 Daniel Romero
  * @license   https://github.com/dromero86/tero/blob/master/LICENSE (MIT License)
  */    
 
@@ -130,6 +130,18 @@ class schema {
      * @var string 
      */ 
     private $ql_order    = "\nORDER BY ";
+
+
+    private $_order_ql = "";
+    private $_group_ql = "";
+    private $_limit_ql = "";
+
+    /**
+     * string procedure
+     *
+     * @var string 
+     */ 
+    private $_procedure = "";
     
     /**
      * Load objects
@@ -142,6 +154,12 @@ class schema {
 
         $this->config = file_get_json(BASEPATH.$this->config_file);  
     } 
+
+
+    public function procedure($query)
+    {
+        $this->_procedure = "CALL {$query}";
+    }
 
     /**
      * Join
@@ -318,7 +336,7 @@ class schema {
      */ 
     public function limit($k)
     {
-        $this->current .= "{$this->ql_limit} {$k}"; 
+        $this->_limit_ql .= "{$this->ql_limit} {$k}"; 
 
         return $this;
     }
@@ -340,7 +358,7 @@ class schema {
             $key = $this->alias($this->active).".".$key;
             $ord[]="{$key} {$value}";
         }
-        $this->current .= "{$this->ql_order} ".implode(",",$ord); 
+        $this->_order_ql .= "{$this->ql_order} ".implode(",",$ord); 
 
         return $this;
     }    
@@ -359,7 +377,7 @@ class schema {
             $arg[$key]=$this->alias($this->active).".".$value;
         }
 
-        $this->current .= "{$this->ql_group} ".implode(",",$arg); 
+        $this->_group_ql .= "{$this->ql_group} ".implode(",",$arg); 
 
         return $this;
     }    
@@ -429,18 +447,43 @@ class schema {
     {
         if( $this->db == null ) throw new Exception("Database not found");
 
-        $this->current = replace($this->current, array( 'field'=> implode(",\n\t", $this->_select) ));
+        if(count($this->_select)>0)
+        {
+            $this->current = replace($this->current, array( 'field'=> implode(",\n\t", $this->_select) ));
 
-        $this->SQL = $this->current.( count($this->filter)>0 ? " WHERE ".implode(" AND ", $this->filter) : "" );
+            $this->SQL = $this->current.( count($this->filter)>0 ? " WHERE ".implode(" AND ", $this->filter) : "" );
 
-        $rs = $this->db->query( $this->SQL ); 
+            if($this->_group_ql) $this->SQL .= $this->_group_ql."\n";
 
-        $output_object           = new stdclass;
-        $output_object->request  = $this->cmd;
-        $output_object->data     = ($expect == "list" ? $rs->result() : $rs->first());
-        $output_object->sql      = $this->SQL ;
+            if($this->_order_ql) $this->SQL .= $this->_order_ql."\n";
 
-        $this->write( json_encode( $output_object ) );
+            if($this->_limit_ql) $this->SQL .= $this->_limit_ql."\n";     
+            
+            $rs = $this->db->query( $this->SQL );        
+        }
+        else
+        {
+            if($this->_procedure)
+            {
+                $this->SQL = $this->_procedure;
+
+                $rs = $this->db->procedure( $this->SQL ); 
+            }
+        }
+  
+        if($this->SQL)
+        { 
+            $output_object           = new stdclass;
+            $output_object->request  = $this->cmd;
+            $output_object->data     = ($expect == "list" ? $rs->result() : $rs->first());
+            $output_object->sql      = $this->SQL ;
+
+            $this->write( json_encode( $output_object ) ); 
+        }
+        else
+        {
+            die("SQL data not found");  
+        }
     }
 
     /**

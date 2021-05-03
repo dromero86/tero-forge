@@ -4,7 +4,7 @@
  * Tero Framework 
  *
  * @link      https://github.com/dromero86/tero
- * @copyright Copyright (c) 2014-2019 Daniel Romero
+ * @copyright Copyright (c) 2014-2021 Daniel Romero
  * @license   https://github.com/dromero86/tero/blob/master/LICENSE (MIT License)
  */    
 
@@ -62,6 +62,8 @@ class crunch {
         { 
             $css = str_replace("@{$key}", $vars, $css);
         }
+
+        $css = str_replace("[url]", base_url(), $css);
 
         file_put_contents($this->config->output, $css);
 
